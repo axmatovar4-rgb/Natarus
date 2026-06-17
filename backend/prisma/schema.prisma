@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  NOTARIUS
+  CLIENT
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum PropertyType {
+  REAL_ESTATE
+  VEHICLE
+  BUSINESS
+  INTELLECTUAL
+  OTHER
+}
+
+enum DocumentType {
+  PASSPORT
+  PROPERTY_CERTIFICATE
+  TECHNICAL_PASSPORT
+  POWER_OF_ATTORNEY
+  CONTRACT
+  OTHER
+}
+
+model User {
+  id           String   @id @default(uuid())
+  fullName     String
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  role         Role     @default(CLIENT)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  createdApplications  Application[] @relation("CreatedBy")
+  senderApplications   Application[] @relation("Sender")
+  receiverApplications Application[] @relation("Receiver")
+
+  @@map("users")
+}
+
+model Application {
+  id          String            @id @default(uuid())
+  title       String
+  description String?
+  status      ApplicationStatus @default(DRAFT)
+  propertyType PropertyType
+
+  // Ariza raqami va tekshirish paroli (mijoz o'zi belgilaydi)
+  applicationCode  String?   // Mijoz bergan ariza raqami
+  accessPassword   String?   // Tekshirish uchun parol
+
+  // Notarius
+  notariusId  String
+  notarius    User   @relation("CreatedBy", fields: [notariusId], references: [id])
+
+  // Beruvchi
+  senderId    String
+  sender      User   @relation("Sender", fields: [senderId], references: [id])
+
+  // Qabul qiluvchi — tizimda ro'yxatdan o'tmagan bo'lishi mumkin
+  receiverId   String?
+  receiver     User?   @relation("Receiver", fields: [receiverId], references: [id])
+  receiverName String? // Ism yozish orqali kiritilgan
+
+  property    Property?
+  documents   Document[]
+  history     ApplicationHistory[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("applications")
+}
+
+model Property {
+  id            String      @id @default(uuid())
+  applicationId String      @unique
+  application   Application @relation(fields: [applicationId], references: [id])
+
+  type          PropertyType
+  name          String
+  description   String?
+  address       String?
+  cadastralNumber String?
+  estimatedValue  Float?
+  additionalInfo  Json?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("properties")
+}
+
+model Document {
+  id            String       @id @default(uuid())
+  applicationId String
+  application   Application  @relation(fields: [applicationId], references: [id])
+
+  type          DocumentType
+  name          String
+  filePath      String
+  fileSize      Int
+  mimeType      String
+  uploadedBy    String
+
+  createdAt     DateTime @default(now())
+
+  @@map("documents")
+}
+
+model ApplicationHistory {
+  id            String            @id @default(uuid())
+  applicationId String
+  application   Application       @relation(fields: [applicationId], references: [id])
+
+  status        ApplicationStatus
+  comment       String?
+  changedBy     String
+
+  createdAt     DateTime @default(now())
+
+  @@map("application_history")
+}
